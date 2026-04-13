@@ -1,0 +1,30 @@
+field,value
+style,Bermudan
+position,Long Receiver
+type,1Y x 5Y
+notional,10000000
+currency,USD
+strike_pct,3.575639
+first_exercise,2027-03-18
+swap_start,2027-03-22
+swap_end,2032-03-22
+notification_days_BD,2
+premium_paid_at_expiry,TRUE
+fee_pay,0.00
+fee_date,2026-03-18
+delivery,Price (Cash)
+curve_date,2026-03-18
+valuation_date,2026-03-18
+model,HW1F
+volatility_type,Normal
+ois_dc_stripping,TRUE
+atm_strike_pct,3.575639
+yield_value_bp,49.402
+npv_without_fee_USD,217667.85
+npv_USD,217667.85
+underlying_premium,0.00000
+premium_pct,2.17668
+DV01_USD,2108.96
+gamma_1bp,15.09
+vega_1bp_USD,2536.16
+theta_1day_USD,-117.89
