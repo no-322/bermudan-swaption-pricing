@@ -1,0 +1,8 @@
+instrument,style,position,type,strike_pct,notional,npv_usd,premium_pct,yield_value_bp,dv01_usd,gamma_1bp,vega_1bp_usd,theta_1day_usd,atm_strike_pct,model,vol_type,curve_date
+bermudan_payer,Bermudan,Long Payer,1Y x 5Y,3.575639,10000000,235822.51,2.35823,53.519,-1896.76,11.33,2586.67,-109.73,3.575989,HW1F,Normal,2026-03-18
+bermudan_receiver,Bermudan,Long Receiver,1Y x 5Y,3.575639,10000000,218360.77,2.18361,49.556,2109.85,15.01,2532.84,-118.04,3.575989,HW1F,Normal,2026-03-18
+european_payer_1Yx5Y,European,Long Payer,1Y x 5Y,3.575639,10000000,154874.33,1.54874,35.148,-2152.12,17.96,1761.46,-175.80,3.575989,HW1F,Normal,2026-03-18
+european_receiver_1Yx5Y,European,Long Receiver,1Y x 5Y,3.575639,10000000,154720.18,1.54720,35.113,2251.63,21.36,1761.46,-175.82,3.575989,HW1F,Normal,2026-03-18
+european_payer_1Yx4Y,European,Long Payer,1Y x 4Y,3.575639,10000000,119120.58,1.19121,33.214,-1663.48,14.50,1437.87,-155.90,3.518688,HW1F,Normal,2026-03-18
+european_payer_2Yx3Y,European,Long Payer,2Y x 3Y,3.575639,10000000,129617.75,1.29618,48.998,-1243.14,7.25,1496.34,-57.77,3.529575,HW1F,Normal,2026-03-18
+european_payer_4Yx1Y,European,Long Payer,4Y x 1Y,3.575639,10000000,65434.48,0.65434,76.672,-414.54,0.23,684.16,-14.51,3.659455,HW1F,Normal,2026-03-18

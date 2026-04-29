@@ -1,0 +1,104 @@
+{
+  "2025-03-18": {
+    "atm_strike": 3.6983,
+    "bermudan": 238232.29,
+    "std_error": 1375.64,
+    "european_mc": 164132.84,
+    "european_bachelier": 182020.9,
+    "premium": 74099.45,
+    "exercise_probs": [
+      0.1933,
+      0.1327,
+      0.0967,
+      0.0718,
+      0.069
+    ],
+    "sabr_pairs_ok": 98,
+    "sabr_rmse_bp": 0.2
+  },
+  "2025-06-18": {
+    "atm_strike": 3.5611,
+    "bermudan": 238457.33,
+    "std_error": 1355.17,
+    "european_mc": 158971.52,
+    "european_bachelier": 177063.77,
+    "premium": 79485.81,
+    "exercise_probs": [
+      0.1773,
+      0.1337,
+      0.1044,
+      0.0864,
+      0.0783
+    ],
+    "sabr_pairs_ok": 98,
+    "sabr_rmse_bp": 2.3
+  },
+  "2025-09-18": {
+    "atm_strike": 3.2561,
+    "bermudan": 196079.03,
+    "std_error": 1235.09,
+    "european_mc": 139229.93,
+    "european_bachelier": 141345.48,
+    "premium": 56849.1,
+    "exercise_probs": [
+      0.1916,
+      0.1146,
+      0.0935,
+      0.112,
+      0.0002
+    ],
+    "sabr_pairs_ok": 98,
+    "sabr_rmse_bp": 0.56
+  },
+  "2025-12-18": {
+    "atm_strike": 3.5369,
+    "bermudan": 214627.87,
+    "std_error": 1160.88,
+    "european_mc": 136641.28,
+    "european_bachelier": 140783.68,
+    "premium": 77986.58,
+    "exercise_probs": [
+      0.1446,
+      0.1606,
+      0.1316,
+      0.089,
+      0.0839
+    ],
+    "sabr_pairs_ok": 98,
+    "sabr_rmse_bp": 0.47
+  },
+  "2026-02-18": {
+    "atm_strike": 3.3689,
+    "bermudan": 201700.65,
+    "std_error": 1103.24,
+    "european_mc": 130545.61,
+    "european_bachelier": 135764.34,
+    "premium": 71155.04,
+    "exercise_probs": [
+      0.1596,
+      0.147,
+      0.1126,
+      0.094,
+      0.0898
+    ],
+    "sabr_pairs_ok": 98,
+    "sabr_rmse_bp": 0.41
+  },
+  "2026-03-18": {
+    "atm_strike": 3.5423,
+    "bermudan": 214127.54,
+    "std_error": 1194.34,
+    "european_mc": 144355.46,
+    "european_bachelier": 154019.38,
+    "premium": 69772.08,
+    "exercise_probs": [
+      0.1844,
+      0.1333,
+      0.0999,
+      0.0893,
+      0.081
+    ],
+    "sabr_pairs_ok": 98,
+    "sabr_rmse_bp": 0.38
+  }
+}

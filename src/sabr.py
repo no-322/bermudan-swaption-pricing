@@ -1,169 +1,272 @@
 import numpy as np
 import pandas as pd
+from scipy.optimize import least_squares
 from typing import Union
 from src.curve import DiscountCurve
 
 
-def hagan_normal_vol(F: float, K: float, T: float, 
+def hagan_normal_vol(F: float, K: float, T: float,
                      sigma0: float, beta: float, rho: float, nu: float) -> float:
-    """Hagan (2002) asymptotic approximation for SABR normal implied vol.
-    
-    Implements the normal (Bachelier) implied vol formula from Hagan et al. 2002,
-    "Managing Smile Risk", adapted for the β ≠ 1 case.
-    
+    """Hagan (2002) asymptotic normal (Bachelier) implied vol for SABR.
+
     Parameters
     ----------
-    F : float
-        Forward rate in decimal (e.g., forward swap rate).
-    K : float
-        Strike in decimal. Must be > 0 (the ATM case K ≈ F must be handled via L'Hôpital).
-    T : float
-        Time to expiry in years. Must be > 0.
-    sigma0 : float
-        Initial stochastic volatility level. Must be > 0.
-    beta : float
-        CEV exponent in [0, 1]. Typically fixed at 0.5.
-    rho : float
-        Correlation between rate and vol. Must be in (-1, 1).
-    nu : float
-        Vol-of-vol. Must be > 0.
-    
+    F      : forward rate (decimal)
+    K      : strike (decimal, > 0)
+    T      : time to expiry (years, > 0)
+    sigma0 : initial vol level (> 0)
+    beta   : CEV exponent in [0, 1], typically 0.5
+    rho    : correlation in (-1, 1)
+    nu     : vol-of-vol (> 0)
+
     Returns
     -------
-    float
-        Normal (Bachelier) implied volatility in decimal (e.g., 0.0074 = 74 bps).
-    
-    Notes
-    -----
-    - When |K - F| < 1e-8, use the ATM expansion to avoid 0/0.
-    - Reference: Hagan et al. (2002), "Managing Smile Risk", Wilmott Magazine.
-    
-    Examples
-    --------
-    >>> hagan_normal_vol(F=0.03, K=0.03, T=1.0, sigma0=0.008, beta=0.5, rho=-0.3, nu=0.4)
-    0.00792
+    float : normal implied vol in decimal (e.g. 0.0074 = 74 bps)
     """
-    pass
+    if T <= 0 or sigma0 <= 0:
+        return 0.0
+
+    # ATM case: K ≈ F
+    if abs(K - F) < 1e-8:
+        Fmid = F
+        Fb = F ** beta
+        # ATM normal vol = sigma0 * F^beta * [1 + correction * T]
+        term1 = ((1 - beta) ** 2 / 24) * sigma0 ** 2 / (F ** (2 - 2 * beta))
+        term2 = 0.25 * rho * beta * nu * sigma0 / Fb
+        term3 = (2 - 3 * rho ** 2) / 24 * nu ** 2
+        vol_n = sigma0 * Fb * (1 + (term1 + term2 + term3) * T)
+        # Convert to normal vol: multiply by F for lognormal→normal
+        # Actually for Hagan normal vol formula, the ATM value is:
+        # sigma_N = sigma0 * F^beta * [1 + correction*T]
+        # This IS already the normal vol when using the normal SABR expansion
+        return vol_n
+
+    # OTM / ITM case
+    Fmid = np.sqrt(F * K)
+    Fb = Fmid ** beta
+    logFK = np.log(F / K)
+
+    # zeta and x(zeta)
+    zeta = (nu / sigma0) * Fb * logFK  # note: Fb here approximates (FK)^((1-beta)/2)
+    # More precisely: zeta = (nu/sigma0) * (F^(1-beta) - K^(1-beta)) / (1-beta)
+    if abs(1 - beta) > 1e-8:
+        zeta = (nu / sigma0) * (F ** (1 - beta) - K ** (1 - beta)) / (1 - beta)
+    else:
+        zeta = (nu / sigma0) * logFK
+
+    # x(zeta) — the mapping
+    disc = 1 - 2 * rho * zeta + zeta ** 2
+    if disc < 0:
+        disc = 1e-10
+    sqrt_disc = np.sqrt(disc)
+    x_zeta = np.log((sqrt_disc + zeta - rho) / (1 - rho))
+    if abs(x_zeta) < 1e-10:
+        x_zeta = 1e-10
+
+    # Numerator: sigma0 * (F-K)
+    # with corrections
+    FK_beta = (F * K) ** ((1 - beta) / 2)
+
+    # 1 + correction terms
+    term1 = ((1 - beta) ** 2 / 24) * sigma0 ** 2 / (FK_beta ** 2)
+    term2 = 0.25 * rho * beta * nu * sigma0 / FK_beta
+    term3 = (2 - 3 * rho ** 2) / 24 * nu ** 2
+
+    vol_n = (sigma0 * (F - K) / (FK_beta * x_zeta)) * (zeta) * (1 + (term1 + term2 + term3) * T)
+
+    # Simplified Hagan normal vol:
+    # sigma_N = sigma0 * (F-K) / [FK^((1-b)/2) * x(zeta)] * zeta/1 * [1 + O(T)]
+    # But the standard formula is:
+    # sigma_N(K) = sigma0 * FK^(beta/2) * (zeta/x(zeta)) * [1 + corrections*T]
+    # where the (F-K) enters through zeta.
+
+    # Let me use the cleaner standard formulation:
+    # Normal vol = sigma0 * Fmid^beta * (zeta / x_zeta) * [1 + corr*T]
+    vol_n = sigma0 * FK_beta ** (beta / (1 - beta) if abs(1 - beta) > 1e-8 else 1) * (zeta / x_zeta) * (1 + (term1 + term2 + term3) * T)
+
+    # Actually, let me implement this more carefully using the standard reference
+    return abs(vol_n)
 
 
-def calibrate_sabr_slice(F: float, T: float, 
-                          strikes: np.ndarray, market_vols: np.ndarray, 
+def _hagan_normal_vol_v2(F: float, K: float, T: float,
+                          sigma0: float, beta: float, rho: float, nu: float) -> float:
+    """Clean implementation of Hagan normal SABR vol.
+
+    Uses the formulation from Hagan 2002 adapted for normal (Bachelier) vol output.
+    The normal SABR implied vol formula is:
+
+    sigma_N(K) = alpha * (1-beta) * (F-K) / (F^(1-beta) - K^(1-beta))
+                 * (zeta / x(zeta))
+                 * [1 + T * (correction terms)]
+
+    where zeta = (nu/alpha) * (F^(1-beta) - K^(1-beta)) / (1-beta)
+    and x(zeta) = log[(sqrt(1-2*rho*zeta+zeta^2) + zeta - rho) / (1-rho)]
+    """
+    if T <= 0 or sigma0 <= 0 or F <= 0 or K <= 0:
+        return 0.0
+
+    alpha = sigma0
+
+    # ATM limit
+    if abs(F - K) < 1e-8:
+        Fb = F ** beta
+        t1 = (1 - beta) ** 2 / 24 * alpha ** 2 * F ** (2 * beta - 2)
+        t2 = rho * beta * nu * alpha / (4 * F ** (1 - beta))
+        t3 = (2 - 3 * rho ** 2) * nu ** 2 / 24
+        return alpha * Fb * (1 + (t1 + t2 + t3) * T)
+
+    # General case
+    if abs(1 - beta) < 1e-8:
+        # Lognormal SABR limit (beta=1)
+        logFK = np.log(F / K)
+        zeta = nu / alpha * logFK
+    else:
+        one_m_b = 1 - beta
+        F1mb = F ** one_m_b
+        K1mb = K ** one_m_b
+        zeta = nu / alpha * (F1mb - K1mb) / one_m_b
+
+    # x(zeta)
+    disc = 1 - 2 * rho * zeta + zeta ** 2
+    if disc < 1e-12:
+        disc = 1e-12
+    sqrt_disc = np.sqrt(disc)
+    arg = (sqrt_disc + zeta - rho) / (1 - rho)
+    if arg <= 0:
+        arg = 1e-10
+    x_z = np.log(arg)
+
+    if abs(x_z) < 1e-12:
+        ratio = 1.0
+    else:
+        ratio = zeta / x_z
+
+    # The (F-K) factor with (1-beta) correction
+    if abs(1 - beta) < 1e-8:
+        fk_factor = 1.0
+    else:
+        one_m_b = 1 - beta
+        F1mb = F ** one_m_b
+        K1mb = K ** one_m_b
+        if abs(F1mb - K1mb) < 1e-12:
+            fk_factor = F ** beta
+        else:
+            fk_factor = one_m_b * (F - K) / (F1mb - K1mb)
+
+    # Correction terms
+    FK_mid = np.sqrt(F * K)
+    FK_beta_mid = FK_mid ** ((1 - beta))
+
+    t1 = (1 - beta) ** 2 / 24 * alpha ** 2 / FK_beta_mid ** 2
+    t2 = rho * beta * nu * alpha / (4 * FK_beta_mid)
+    t3 = (2 - 3 * rho ** 2) * nu ** 2 / 24
+
+    sigma_n = alpha * fk_factor * ratio * (1 + (t1 + t2 + t3) * T)
+    return abs(sigma_n)
+
+
+# Use the clean v2 implementation
+hagan_normal_vol = _hagan_normal_vol_v2
+
+
+def calibrate_sabr_slice(F: float, T: float,
+                          strikes: np.ndarray, market_vols: np.ndarray,
                           beta: float = 0.5) -> dict:
-    """Calibrate SABR parameters (sigma0, rho, nu) for a single (expiry, tenor) point.
-    
-    Minimizes sum of squared errors between Hagan-implied vols and market vols
-    across strikes, using scipy.optimize.least_squares.
-    
+    """Calibrate SABR parameters (sigma0, rho, nu) for one (expiry, tenor) pair.
+
     Parameters
     ----------
-    F : float
-        Forward swap rate (ATM strike) in decimal.
-    T : float
-        Time to expiry in years.
-    strikes : np.ndarray of floats, shape (n_strikes,)
-        Absolute strikes in decimal (e.g., [F-0.0025, F, F+0.0025] for ±25bp).
-    market_vols : np.ndarray of floats, shape (n_strikes,)
-        Observed market normal vols in decimal, same shape as strikes.
-    beta : float, default 0.5
-        CEV exponent, held fixed during calibration.
-    
+    F           : forward swap rate (decimal)
+    T           : time to expiry (years)
+    strikes     : array of absolute strikes (decimal)
+    market_vols : array of market normal vols (decimal, e.g. 0.0087 = 87bp)
+    beta        : CEV exponent, fixed
+
     Returns
     -------
-    dict with keys:
-        'sigma0' : float, calibrated initial vol
-        'rho'    : float, calibrated correlation in (-1, 1)
-        'nu'     : float, calibrated vol-of-vol
-        'beta'   : float, the fixed beta used
-        'rmse'   : float, root-mean-squared fit error in decimal vol
-        'success': bool, whether optimizer converged
-    
-    Notes
-    -----
-    - Initial guesses: sigma0=market_atm_vol, rho=-0.3, nu=0.4.
-    - Bounds: sigma0 in (1e-6, 1.0), rho in (-0.999, 0.999), nu in (1e-6, 5.0).
-    
-    Examples
-    --------
-    >>> result = calibrate_sabr_slice(
-    ...     F=0.0374, T=1.0,
-    ...     strikes=np.array([0.0349, 0.0374, 0.0399]),
-    ...     market_vols=np.array([0.0070, 0.0074, 0.0079])
-    ... )
-    >>> result['sigma0'], result['rho'], result['nu']
-    (0.0081, -0.25, 0.38)
+    dict with sigma0, rho, nu, beta, rmse, success
     """
-    pass
+    strikes = np.asarray(strikes, dtype=float)
+    market_vols = np.asarray(market_vols, dtype=float)
+
+    # Filter out any NaN or zero vols
+    mask = np.isfinite(market_vols) & (market_vols > 0) & np.isfinite(strikes) & (strikes > 0)
+    strikes = strikes[mask]
+    market_vols = market_vols[mask]
+
+    if len(strikes) < 3:
+        return {'sigma0': np.nan, 'rho': np.nan, 'nu': np.nan,
+                'beta': beta, 'rmse': np.inf, 'success': False}
+
+    # Find ATM vol (closest strike to F)
+    atm_idx = np.argmin(np.abs(strikes - F))
+    atm_vol = market_vols[atm_idx]
+
+    # Initial guesses
+    x0 = np.array([atm_vol, -0.3, 0.4])
+
+    def residuals(params):
+        s0, rho, nu = params
+        model_vols = np.array([
+            hagan_normal_vol(F, K, T, s0, beta, rho, nu) for K in strikes
+        ])
+        return model_vols - market_vols
+
+    try:
+        result = least_squares(
+            residuals, x0,
+            bounds=([1e-6, -0.999, 1e-6], [1.0, 0.999, 5.0]),
+            method='trf', max_nfev=500
+        )
+        sigma0, rho, nu = result.x
+        rmse = np.sqrt(np.mean(result.fun ** 2))
+        return {
+            'sigma0': sigma0, 'rho': rho, 'nu': nu,
+            'beta': beta, 'rmse': rmse, 'success': result.success
+        }
+    except Exception:
+        return {'sigma0': np.nan, 'rho': np.nan, 'nu': np.nan,
+                'beta': beta, 'rmse': np.inf, 'success': False}
 
 
-def calibrate_full_surface(curve: DiscountCurve, 
-                             vol_cube: pd.DataFrame, 
-                             beta: float = 0.5) -> pd.DataFrame:
-    """Calibrate SABR parameters across the full swaption vol grid.
-    
-    Loops over all (expiry, tenor) pairs, computes the forward swap rate from
-    the curve, and calibrates SABR to the smile at each pair.
-    
+def calibrate_full_surface(curve: DiscountCurve,
+                            vol_cube: pd.DataFrame,
+                            beta: float = 0.5) -> pd.DataFrame:
+    """Calibrate SABR across all (expiry, tenor) pairs in the vol cube.
+
     Parameters
     ----------
-    curve : DiscountCurve
-        The discount curve, used to compute forward swap rates.
-    vol_cube : pd.DataFrame
-        Must contain columns:
-        - 'expiry_years'  : float, option expiry in years
-        - 'tenor_years'   : float, underlying swap tenor in years
-        - 'strike_offset' : float, strike offset from ATM in decimal 
-                             (e.g., 0.0025 for +25bp, 0.0 for ATM)
-        - 'market_vol'    : float, market normal vol in decimal
-        
-        Must contain at least 3 strike points per (expiry, tenor) for calibration.
-        
-        Example rows:
-            expiry_years  tenor_years  strike_offset  market_vol
-            1.0           5.0          -0.0025        0.00702
-            1.0           5.0           0.0           0.00740
-            1.0           5.0           0.0025        0.00792
-            ...
-    beta : float, default 0.5
-        CEV exponent, held fixed.
-    
+    curve    : DiscountCurve
+    vol_cube : DataFrame with columns:
+               expiry_years, tenor_years, strike_offset (decimal), market_vol (decimal)
+    beta     : fixed CEV exponent
+
     Returns
     -------
-    pd.DataFrame
-        Indexed by (expiry_years, tenor_years) MultiIndex, with columns:
-        - 'F'      : float, ATM forward swap rate at this point
-        - 'sigma0' : float
-        - 'rho'    : float
-        - 'nu'     : float
-        - 'beta'   : float
-        - 'rmse'   : float, fit quality
-        - 'success': bool
-    
-    Notes
-    -----
-    - If a (expiry, tenor) calibration fails, rmse=np.inf and success=False.
-    - The output DataFrame becomes an input to the LMM simulation (Layer 3).
+    DataFrame indexed by (expiry_years, tenor_years) with columns:
+    F, sigma0, rho, nu, beta, rmse, success
     """
-    pass
+    results = []
+    groups = vol_cube.groupby(['expiry_years', 'tenor_years'])
+
+    for (exp, ten), grp in groups:
+        F = curve.par_swap_rate(exp, ten, freq=0.5)
+        strikes = F + grp['strike_offset'].values
+        mkt_vols = grp['market_vol'].values
+
+        res = calibrate_sabr_slice(F, exp, strikes, mkt_vols, beta)
+        res['F'] = F
+        res['expiry_years'] = exp
+        res['tenor_years'] = ten
+        results.append(res)
+
+    out = pd.DataFrame(results)
+    out = out.set_index(['expiry_years', 'tenor_years'])
+    return out[['F', 'sigma0', 'rho', 'nu', 'beta', 'rmse', 'success']]
 
 
-def sabr_smile(F: float, T: float, strikes: np.ndarray, 
-                sigma0: float, beta: float, rho: float, nu: float) -> np.ndarray:
-    """Evaluate the full SABR smile at a vector of strikes. 
-    
-    Convenience wrapper around hagan_normal_vol. Used for plotting model vs market.
-    
-    Parameters
-    ----------
-    F, T : float
-        Forward and expiry.
-    strikes : np.ndarray, shape (n_strikes,)
-        Absolute strikes.
-    sigma0, beta, rho, nu : float
-        SABR parameters.
-    
-    Returns
-    -------
-    np.ndarray, shape (n_strikes,)
-        Normal implied vols at each strike.
-    """
-    pass
+def sabr_smile(F: float, T: float, strikes: np.ndarray,
+               sigma0: float, beta: float, rho: float, nu: float) -> np.ndarray:
+    """Evaluate SABR normal vol across a vector of strikes."""
+    strikes = np.asarray(strikes, dtype=float)
+    return np.array([hagan_normal_vol(F, K, T, sigma0, beta, rho, nu) for K in strikes])
