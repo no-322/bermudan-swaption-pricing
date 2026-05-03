@@ -151,13 +151,7 @@ def simulate_lmm(curve: DiscountCurve,
 
             sigma_i = vols[i]
 
-            # HJM drift under terminal measure T_N
-            # mu_i = -sum_{j=i+1}^{N-1} [delta_j * sigma_i * sigma_j * rho_{ij} * F_j]
-            #         / (1 + delta_j * F_j)
-            # Note: under terminal measure, the drift is negative (discount bond numeraire)
-            # Actually the standard formula under T_N-forward measure:
-            # mu_i(t) = -sigma_i * sum_{j=i+1}^{N-1} [delta_j * F_j(t) * sigma_j * rho_{ij}]
-            #            / (1 + delta_j * F_j(t))
+            # HJM drift: mu_i = -sigma_i * sum_j [d_j*F_j*sigma_j*rho_ij / (1+d_j*F_j)]
             drift = 0.0
             for j in range(i + 1, N):
                 if t >= tenor_structure[j]:

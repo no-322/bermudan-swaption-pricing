@@ -6,101 +6,10 @@ from src.curve import DiscountCurve
 
 
 def hagan_normal_vol(F: float, K: float, T: float,
-                     sigma0: float, beta: float, rho: float, nu: float) -> float:
-    """Hagan (2002) asymptotic normal (Bachelier) implied vol for SABR.
+                      sigma0: float, beta: float, rho: float, nu: float) -> float:
+    """Hagan (2002) normal SABR implied vol. Appendix A, Eq. (A.67).
 
-    Parameters
-    ----------
-    F      : forward rate (decimal)
-    K      : strike (decimal, > 0)
-    T      : time to expiry (years, > 0)
-    sigma0 : initial vol level (> 0)
-    beta   : CEV exponent in [0, 1], typically 0.5
-    rho    : correlation in (-1, 1)
-    nu     : vol-of-vol (> 0)
-
-    Returns
-    -------
-    float : normal implied vol in decimal (e.g. 0.0074 = 74 bps)
-    """
-    if T <= 0 or sigma0 <= 0:
-        return 0.0
-
-    # ATM case: K ≈ F
-    if abs(K - F) < 1e-8:
-        Fmid = F
-        Fb = F ** beta
-        # ATM normal vol = sigma0 * F^beta * [1 + correction * T]
-        term1 = ((1 - beta) ** 2 / 24) * sigma0 ** 2 / (F ** (2 - 2 * beta))
-        term2 = 0.25 * rho * beta * nu * sigma0 / Fb
-        term3 = (2 - 3 * rho ** 2) / 24 * nu ** 2
-        vol_n = sigma0 * Fb * (1 + (term1 + term2 + term3) * T)
-        # Convert to normal vol: multiply by F for lognormal→normal
-        # Actually for Hagan normal vol formula, the ATM value is:
-        # sigma_N = sigma0 * F^beta * [1 + correction*T]
-        # This IS already the normal vol when using the normal SABR expansion
-        return vol_n
-
-    # OTM / ITM case
-    Fmid = np.sqrt(F * K)
-    Fb = Fmid ** beta
-    logFK = np.log(F / K)
-
-    # zeta and x(zeta)
-    zeta = (nu / sigma0) * Fb * logFK  # note: Fb here approximates (FK)^((1-beta)/2)
-    # More precisely: zeta = (nu/sigma0) * (F^(1-beta) - K^(1-beta)) / (1-beta)
-    if abs(1 - beta) > 1e-8:
-        zeta = (nu / sigma0) * (F ** (1 - beta) - K ** (1 - beta)) / (1 - beta)
-    else:
-        zeta = (nu / sigma0) * logFK
-
-    # x(zeta) — the mapping
-    disc = 1 - 2 * rho * zeta + zeta ** 2
-    if disc < 0:
-        disc = 1e-10
-    sqrt_disc = np.sqrt(disc)
-    x_zeta = np.log((sqrt_disc + zeta - rho) / (1 - rho))
-    if abs(x_zeta) < 1e-10:
-        x_zeta = 1e-10
-
-    # Numerator: sigma0 * (F-K)
-    # with corrections
-    FK_beta = (F * K) ** ((1 - beta) / 2)
-
-    # 1 + correction terms
-    term1 = ((1 - beta) ** 2 / 24) * sigma0 ** 2 / (FK_beta ** 2)
-    term2 = 0.25 * rho * beta * nu * sigma0 / FK_beta
-    term3 = (2 - 3 * rho ** 2) / 24 * nu ** 2
-
-    vol_n = (sigma0 * (F - K) / (FK_beta * x_zeta)) * (zeta) * (1 + (term1 + term2 + term3) * T)
-
-    # Simplified Hagan normal vol:
-    # sigma_N = sigma0 * (F-K) / [FK^((1-b)/2) * x(zeta)] * zeta/1 * [1 + O(T)]
-    # But the standard formula is:
-    # sigma_N(K) = sigma0 * FK^(beta/2) * (zeta/x(zeta)) * [1 + corrections*T]
-    # where the (F-K) enters through zeta.
-
-    # Let me use the cleaner standard formulation:
-    # Normal vol = sigma0 * Fmid^beta * (zeta / x_zeta) * [1 + corr*T]
-    vol_n = sigma0 * FK_beta ** (beta / (1 - beta) if abs(1 - beta) > 1e-8 else 1) * (zeta / x_zeta) * (1 + (term1 + term2 + term3) * T)
-
-    # Actually, let me implement this more carefully using the standard reference
-    return abs(vol_n)
-
-
-def _hagan_normal_vol_v2(F: float, K: float, T: float,
-                          sigma0: float, beta: float, rho: float, nu: float) -> float:
-    """Clean implementation of Hagan normal SABR vol.
-
-    Uses the formulation from Hagan 2002 adapted for normal (Bachelier) vol output.
-    The normal SABR implied vol formula is:
-
-    sigma_N(K) = alpha * (1-beta) * (F-K) / (F^(1-beta) - K^(1-beta))
-                 * (zeta / x(zeta))
-                 * [1 + T * (correction terms)]
-
-    where zeta = (nu/alpha) * (F^(1-beta) - K^(1-beta)) / (1-beta)
-    and x(zeta) = log[(sqrt(1-2*rho*zeta+zeta^2) + zeta - rho) / (1-rho)]
+    Returns normal (Bachelier) vol in decimal. Uses L'Hopital at ATM.
     """
     if T <= 0 or sigma0 <= 0 or F <= 0 or K <= 0:
         return 0.0
@@ -163,10 +72,6 @@ def _hagan_normal_vol_v2(F: float, K: float, T: float,
 
     sigma_n = alpha * fk_factor * ratio * (1 + (t1 + t2 + t3) * T)
     return abs(sigma_n)
-
-
-# Use the clean v2 implementation
-hagan_normal_vol = _hagan_normal_vol_v2
 
 
 def calibrate_sabr_slice(F: float, T: float,

@@ -35,7 +35,7 @@ class DiscountCurve:
         self.zero_rates = np.asarray(zero_rates, dtype=float)
         self._cs = CubicSpline(self.pillar_times, self.zero_rates)
 
-    # ── Factory: build from Bloomberg stripped zero curve CSV ──────────────
+
     @classmethod
     def from_zero_curve(cls, pricing_date: date, zero_df: pd.DataFrame):
         """Build curve from a DataFrame with columns: date, zero_rate, discount_factor.
@@ -54,7 +54,7 @@ class DiscountCurve:
                             df['zero_rate'].values / 100.0])
         return cls(pricing_date, T, Z)
 
-    # ── Factory: bootstrap from market instruments ────────────────────────
+
     @classmethod
     def from_market_data(cls, pricing_date: date, swap_rates: pd.DataFrame,
                          futures: pd.DataFrame = None):
@@ -109,7 +109,7 @@ class DiscountCurve:
         Z_arr = np.array([p[1] for p in pairs])
         return cls(pricing_date, T_arr, Z_arr)
 
-    # ── Core methods ──────────────────────────────────────────────────────
+
 
     def df(self, t: Union[float, np.ndarray]) -> Union[float, np.ndarray]:
         """Discount factor at time t (years). Log-linear via cubic spline on zero rates."""

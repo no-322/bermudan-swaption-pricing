@@ -109,7 +109,7 @@ def longstaff_schwartz_bermudan(simulation: dict,
 
     exercise_steps = np.array([_find_step(tenor_dates[k]) for k in exercise_indices])
 
-    # ── Compute intrinsic values at each exercise date ────────────────────
+
     # IV[ex, :] = payer swap NPV at exercise date ex
     IV = np.zeros((n_exercise, n_paths))
     swap_rates = np.zeros((n_exercise, n_paths))
@@ -120,7 +120,7 @@ def longstaff_schwartz_bermudan(simulation: dict,
         IV[idx, :] = payer_swap_npv(fwd_at_k, tenor_dates, k, K)
         swap_rates[idx, :] = _swap_rate_at_Tk(fwd_at_k, tenor_dates, k)
 
-    # ── Backward induction (Longstaff-Schwartz) ──────────────────────────
+
 
     # cashflow[m] = the (undiscounted-to-exercise-date) payoff that path m receives
     # exercise_time[m] = the exercise index at which path m exercises (-1 = never)
@@ -199,9 +199,9 @@ def longstaff_schwartz_bermudan(simulation: dict,
         # For paths not exercising now, keep the discounted future cashflow
         # (already stored from next iteration)
 
-    # ── Discount all cashflows to t=0 ────────────────────────────────────
+
     # Use the curve discount factors (not path-dependent) for t=0 discounting
-    # This is the standard approach: DF(0, T_k) from the initial curve
+    # Discount to t=0 using curve DFs
     pv = np.zeros(n_paths)
     for ex_idx in range(n_exercise):
         k = exercise_indices[ex_idx]
@@ -216,7 +216,7 @@ def longstaff_schwartz_bermudan(simulation: dict,
     exercise_probs = np.array([np.mean(exercise_time == ex_idx)
                                for ex_idx in range(n_exercise)])
 
-    # ── European price (exercise only at first date) ─────────────────────
+
     first_k = exercise_indices[0]
     T_first = tenor_dates[first_k]
     euro_pv = np.maximum(IV[0, :], 0.0) * curve.df(T_first)
